@@ -13,37 +13,25 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Generate Proper Gradle Android Project
-        run: |
-          mkdir -p app/src/main
-          
-          # ساخت تنظیمات اصلی پروژه
-          echo 'plugins { id "com.android.application" version "8.2.0" apply false }' > build.gradle
-          echo 'include(":app")' > settings.gradle
-          
-          # ساخت فایل تنظیمات اپ
-          echo 'plugins { id "com.android.application" }' > app/build.gradle
-          echo 'android { namespace "com.example.myapp"; compileSdk 34; defaultConfig { applicationId "com.example.myapp"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0"; } }' >> app/build.gradle
-          
-          # ساخت مانیفست و اکتیویتی
-          echo 'package com.example.myapp;' > app/src/main/MainActivity.java
-          echo 'import android.app.Activity; import android.os.Bundle; public class MainActivity extends Activity { @Override protected void onCreate(Bundle s) { super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText("H.M App Successful!"); setContentView(tv); } }' >> app/src/main/MainActivity.java
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="H.M App"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
-          
-          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
-          gradle wrapper
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Create Complete Android App Project
+        run: |
+          flutter create --org com.hm --project-name hmapp myapp
+          cd myapp
+          flutter build apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: my-first-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: HM-App-Debug
+          path: myapp/build/app/outputs/flutter-apk/app-debug.apk
