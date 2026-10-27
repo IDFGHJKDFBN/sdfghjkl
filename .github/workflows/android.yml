@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Calculator App APK
 
 on:
   push:
@@ -24,14 +24,178 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Complete Android App Project
+      - name: Create Professional Calculator App
         run: |
-          flutter create --org com.hm --project-name hmapp myapp
+          flutter create --org com.hm --project-name calculator_app myapp
           cd myapp
+          
+          # نوشتن کدهای حرفه‌ای ماشین‌حساب در فایل main.dart
+          cat << 'EOF' > lib/main.dart
+          import 'html_stub.dart' if (dart.library.html) 'dart:html' as html;
+          import 'package:flutter/material.dart';
+
+          void main() {
+            runApp(const CalculatorApp());
+          }
+
+          class CalculatorApp extends StatelessWidget {
+            const CalculatorApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'H.M Pro Calculator',
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData(
+                  brightness: Brightness.dark,
+                  primarySwatch: Colors.deepOrange,
+                ),
+                home: const CalculatorHomePage(),
+              );
+            }
+          }
+
+          class CalculatorHomePage extends StatefulWidget {
+            const CalculatorHomePage({super.key});
+
+            @override
+            State<CalculatorHomePage> createState() => _CalculatorHomePageState();
+          }
+
+          class _CalculatorHomePageState extends State<CalculatorHomePage> {
+            String _output = "0";
+            String _operand = "";
+            double _num1 = 0;
+            double _num2 = 0;
+            bool _shouldReset = false;
+
+            void _buttonPressed(String buttonText) {
+              setState(() {
+                if (buttonText == "C") {
+                  _output = "0";
+                  _num1 = 0;
+                  _num2 = 0;
+                  _operand = "";
+                } else if (buttonText == "+" || buttonText == "-" || buttonText == "×" || buttonText == "÷") {
+                  _num1 = double.tryParse(_output) ?? 0;
+                  _operand = buttonText;
+                  _shouldReset = true;
+                } else if (buttonText == ".") {
+                  if (!_output.contains(".")) {
+                    _output = _output + ".";
+                  }
+                } else if (buttonText == "=") {
+                  _num2 = double.tryParse(_output) ?? 0;
+                  if (_operand == "+") _output = (_num1 + _num2).toString();
+                  if (_operand == "-") _output = (_num1 - _num2).toString();
+                  if (_operand == "×") _output = (_num1 * _num2).toString();
+                  if (_operand == "÷") {
+                    _output = _num2 != 0 ? (_num1 / _num2).toString() : "Error";
+                  }
+                  if (_output.endsWith(".0")) {
+                    _output = _output.substring(0, _output.length - 2);
+                  }
+                  _operand = "";
+                  _shouldReset = true;
+                } else {
+                  if (_output == "0" || _shouldReset) {
+                    _output = buttonText;
+                    _shouldReset = false;
+                  } else {
+                    _output = _output + buttonText;
+                  }
+                }
+              });
+            }
+
+            Widget _buildButton(String buttonText, Color color, {Color textColor = Colors.white}) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.all(22.0),
+                      backgroundColor: color,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () => _buttonPressed(buttonText),
+                    child: Text(
+                      buttonText,
+                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('H.M Pro Calculator'),
+                  centerTitle: true,
+                  backgroundColor: Colors.grey[900],
+                ),
+                backgroundColor: Colors.black,
+                body: Column(
+                  children: <Widget>[
+                    Expanded(
+                      child: Container(
+                        alignment: Alignment.bottomRight,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                        child: Text(
+                          _output,
+                          style: const TextStyle(fontSize: 64, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    const Divider(color: Colors.grey, height: 1),
+                    Column(
+                      children: [
+                        Row(children: [
+                          _buildButton("C", Colors.redAccent),
+                          _buildButton("÷", Colors.orange),
+                        ]),
+                        Row(children: [
+                          _buildButton("7", Colors.grey[850]!),
+                          _buildButton("8", Colors.grey[850]!),
+                          _buildButton("9", Colors.grey[850]!),
+                          _buildButton("×", Colors.orange),
+                        ]),
+                        Row(children: [
+                          _buildButton("4", Colors.grey[850]!),
+                          _buildButton("5", Colors.grey[850]!),
+                          _buildButton("6", Colors.grey[850]!),
+                          _buildButton("-", Colors.orange),
+                        ]),
+                        Row(children: [
+                          _buildButton("1", Colors.grey[850]!),
+                          _buildButton("2", Colors.grey[850]!),
+                          _buildButton("3", Colors.grey[850]!),
+                          _buildButton("+", Colors.orange),
+                        ]),
+                        Row(children: [
+                          _buildButton("0", Colors.grey[850]!),
+                          _buildButton(".", Colors.grey[850]!),
+                          _buildButton("=", Colors.green, textColor: Colors.white),
+                        ]),
+                      ],
+                    )
+                  ],
+                ),
+              );
+            }
+          }
+          EOF
+          
+          # فایل کمکی برای پایداری بیلد
+          touch lib/html_stub.dart
+
+          # گرفتن خروجی APK
           flutter build apk --debug
 
-      - name: Upload APK
+      - name: Upload Calculator APK
         uses: actions/upload-artifact@v4
         with:
-          name: HM-App-Debug
+          name: HM-Calculator-APK
           path: myapp/build/app/outputs/flutter-apk/app-debug.apk
