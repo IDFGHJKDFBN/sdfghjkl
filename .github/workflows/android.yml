@@ -19,14 +19,24 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Create Minimal Android Project Structure
+      - name: Generate Proper Gradle Android Project
         run: |
           mkdir -p app/src/main
-          echo 'android { compileSdk 34; defaultConfig { minSdk 21; targetSdk 34; } }' > app/build.gradle
-          echo 'package com.example.myapp;' > app/src/main/MainActivity.java
-          echo '<manifest package="com.example.myapp"><application android:label="H.M App"><activity android:name=".MainActivity"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          
+          # ساخت تنظیمات اصلی پروژه
+          echo 'plugins { id "com.android.application" version "8.2.0" apply false }' > build.gradle
           echo 'include(":app")' > settings.gradle
-          echo 'distributionBase=GRADLE_USER_HOME' > gradle.properties
+          
+          # ساخت فایل تنظیمات اپ
+          echo 'plugins { id "com.android.application" }' > app/build.gradle
+          echo 'android { namespace "com.example.myapp"; compileSdk 34; defaultConfig { applicationId "com.example.myapp"; minSdk 21; targetSdk 34; versionCode 1; versionName "1.0"; } }' >> app/build.gradle
+          
+          # ساخت مانیفست و اکتیویتی
+          echo 'package com.example.myapp;' > app/src/main/MainActivity.java
+          echo 'import android.app.Activity; import android.os.Bundle; public class MainActivity extends Activity { @Override protected void onCreate(Bundle s) { super.onCreate(s); android.widget.TextView tv = new android.widget.TextView(this); tv.setText("H.M App Successful!"); setContentView(tv); } }' >> app/src/main/MainActivity.java
+          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:label="H.M App"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>' > app/src/main/AndroidManifest.xml
+          
+          echo 'org.gradle.jvmargs=-Xmx2048m' > gradle.properties
           gradle wrapper
 
       - name: Build Debug APK
