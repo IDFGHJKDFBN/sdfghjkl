@@ -1,0 +1,591 @@
+package com.example.musicplayer
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Color
+import android.net.Uri
+import android.os.Bundle
+import android.view.ViewGroup
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var webView: WebView
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    // مدیریت باز کردن حافظه گوشی هنگام کلیک روی افزودن آهنگ
+    private val filePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val results: Array<Uri>? = when {
+                data?.clipData != null -> {
+                    val count = data.clipData!!.itemCount
+                    Array(count) { i -> data.clipData!!.getItemAt(i).uri }
+                }
+                data?.data != null -> arrayOf(data.data!!)
+                else -> null
+            }
+            filePathCallback?.onReceiveValue(results)
+        } else {
+            filePathCallback?.onReceiveValue(null)
+        }
+        filePathCallback = null
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // ساخت WebView مستقیم بدون نیاز به فایل XML
+        webView = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.parseColor("#080b14"))
+        }
+        setContentView(webView)
+
+        // کانفیگ بهینه وب‌ویو برای عملکرد فوق‌سریع بومی
+        val settings: WebSettings = webView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.allowFileAccess = true
+        settings.allowContentAccess = true
+        settings.mediaPlaybackRequiresUserGesture = false
+        settings.useWideViewPort = true
+        settings.loadWithOverviewMode = true
+
+        webView.webViewClient = WebViewClient()
+
+        // اتصال دکمه انتخاب فایل HTML به سیستم‌عامل اندروید
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                this@MainActivity.filePathCallback?.onReceiveValue(null)
+                this@MainActivity.filePathCallback = filePathCallback
+
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "audio/*"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+
+                filePickerLauncher.launch(Intent.createChooser(intent, "انتخاب آهنگ"))
+                return true
+            }
+        }
+
+        // تزریق مستقیم کدهای کلاینت به موتور وب‌ویو
+        webView.loadDataWithBaseURL("https://localapp", HTML_CONTENT, "text/html", "UTF-8", null)
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    // کل کد UI، استایل نئونی شیشه‌ای و منطق پخش موزیک در یک متغیر یکپارچه
+    companion object {
+        private val HTML_CONTENT = """
+        <!DOCTYPE html>
+        <html lang="fa" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+          <title>Nova Music Player</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
+
+            :root {
+              --bg: #080b14;
+              --panel: #111624;
+              --text: #f8fafc;
+              --muted: #8c96aa;
+              --primary: #8b5cf6;
+              --secondary: #ec4899;
+              --border: rgba(255,255,255,.09);
+            }
+
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+              font-family: Vazirmatn, sans-serif;
+              -webkit-tap-highlight-color: transparent;
+              user-select: none;
+            }
+
+            body {
+              min-height: 100vh;
+              color: var(--text);
+              background: radial-gradient(circle at 15% 10%, rgba(139,92,246,.25), transparent 30%),
+                          radial-gradient(circle at 85% 20%, rgba(236,72,153,.18), transparent 30%),
+                          var(--bg);
+              overflow-x: hidden;
+            }
+
+            button, input { font-family: inherit; }
+            button { border: none; cursor: pointer; }
+
+            .app { min-height: 100vh; display: flex; flex-direction: column; }
+
+            .main { padding: 20px 18px 180px; min-width: 0; }
+
+            .topbar {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 15px;
+              margin-bottom: 25px;
+            }
+
+            .brand { display: flex; align-items: center; gap: 10px; }
+            .brand-icon {
+              width: 38px;
+              height: 38px;
+              display: grid;
+              place-items: center;
+              border-radius: 12px;
+              background: linear-gradient(135deg, var(--primary), var(--secondary));
+              font-size: 19px;
+              box-shadow: 0 8px 20px rgba(139,92,246,.35);
+            }
+            .brand h1 { font-size: 17px; font-weight: 900; }
+            .brand span { color: var(--secondary); }
+
+            .search { position: relative; flex: 1; max-width: 280px; }
+            .search input {
+              width: 100%;
+              color: white;
+              background: rgba(255,255,255,.07);
+              border: 1px solid var(--border);
+              outline: none;
+              border-radius: 14px;
+              padding: 10px 38px 10px 12px;
+              font-size: 12px;
+            }
+            .search-icon {
+              position: absolute;
+              right: 12px;
+              top: 8px;
+              color: var(--muted);
+              font-size: 16px;
+            }
+
+            .tabs {
+              display: flex;
+              gap: 10px;
+              margin-bottom: 20px;
+            }
+            .tabs button {
+              flex: 1;
+              padding: 10px 14px;
+              border-radius: 12px;
+              background: rgba(255,255,255,.05);
+              color: var(--muted);
+              font-size: 12px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 6px;
+              transition: .25s;
+            }
+            .tabs button.active {
+              background: linear-gradient(90deg, rgba(139,92,246,.3), rgba(236,72,153,.2));
+              color: #fff;
+              border: 1px solid var(--border);
+            }
+
+            .add-box {
+              border: 1px dashed rgba(139,92,246,.5);
+              border-radius: 16px;
+              padding: 16px;
+              color: #c4b5fd;
+              text-align: center;
+              font-size: 13px;
+              margin-bottom: 22px;
+              background: rgba(139,92,246,.08);
+              cursor: pointer;
+            }
+
+            .song-list { display: flex; flex-direction: column; gap: 8px; }
+            .song-row {
+              display: grid;
+              grid-template-columns: 46px 1fr auto;
+              align-items: center;
+              gap: 12px;
+              padding: 10px 12px;
+              border: 1px solid transparent;
+              border-radius: 15px;
+              transition: .2s;
+            }
+            .song-row.active {
+              background: rgba(255,255,255,.09);
+              border-color: var(--border);
+            }
+            .song-cover {
+              width: 46px;
+              height: 46px;
+              display: grid;
+              place-items: center;
+              border-radius: 12px;
+              color: white;
+              font-size: 19px;
+            }
+            .song-info { min-width: 0; }
+            .song-info strong {
+              display: block;
+              overflow: hidden;
+              white-space: nowrap;
+              text-overflow: ellipsis;
+              font-size: 13px;
+              margin-bottom: 4px;
+            }
+            .song-info small { color: var(--muted); font-size: 11px; }
+
+            .icon-btn {
+              width: 36px;
+              height: 36px;
+              color: var(--muted);
+              background: transparent;
+              border-radius: 50%;
+              font-size: 18px;
+            }
+            .icon-btn.active { color: #f472b6; }
+
+            /* Player Bar */
+            .player {
+              position: fixed;
+              z-index: 10;
+              left: 12px;
+              right: 12px;
+              bottom: 12px;
+              padding: 14px 16px;
+              border: 1px solid var(--border);
+              border-radius: 20px;
+              background: rgba(17,22,36,.94);
+              backdrop-filter: blur(25px);
+              box-shadow: 0 20px 60px rgba(0,0,0,.5);
+            }
+
+            .now-playing {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              margin-bottom: 12px;
+            }
+            .now-cover {
+              width: 44px;
+              height: 44px;
+              border-radius: 10px;
+              display: grid;
+              place-items: center;
+              font-size: 18px;
+            }
+            .now-text { min-width: 0; flex: 1; }
+            .now-text strong {
+              display: block;
+              font-size: 12px;
+              overflow: hidden;
+              white-space: nowrap;
+              text-overflow: ellipsis;
+            }
+            .now-text small {
+              display: block;
+              color: var(--muted);
+              font-size: 10px;
+              margin-top: 2px;
+            }
+
+            .controls {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 16px;
+              margin-bottom: 8px;
+            }
+            .control-btn {
+              width: 32px;
+              height: 32px;
+              color: var(--muted);
+              background: transparent;
+              font-size: 16px;
+            }
+            .control-btn.active { color: #fff; }
+            .play-btn {
+              width: 44px;
+              height: 44px;
+              color: white;
+              background: linear-gradient(135deg, var(--primary), var(--secondary));
+              border-radius: 50%;
+              font-size: 18px;
+              box-shadow: 0 6px 16px rgba(139,92,246,.35);
+            }
+
+            .progress-area {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+            .time { color: var(--muted); font-size: 10px; min-width: 30px; text-align: center; }
+            input[type="range"] {
+              width: 100%;
+              height: 4px;
+              accent-color: var(--secondary);
+              cursor: pointer;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="app">
+            <main class="main">
+              <div class="topbar">
+                <div class="brand">
+                  <div class="brand-icon">♫</div>
+                  <h1>Nova<span>App</span></h1>
+                </div>
+                <div class="search">
+                  <span class="search-icon">⌕</span>
+                  <input id="searchInput" type="search" placeholder="جست‌وجو...">
+                </div>
+              </div>
+
+              <div class="tabs">
+                <button class="active" data-view="all">همه</button>
+                <button data-view="favorites">علاقه‌مندی‌ها</button>
+              </div>
+
+              <div class="add-box" id="addBtn">＋ انتخاب آهنگ از حافظه دستگاه</div>
+
+              <div class="song-list" id="songList"></div>
+            </main>
+
+            <input id="fileInput" type="file" accept="audio/*" multiple style="display:none">
+            <audio id="audio"></audio>
+
+            <footer class="player">
+              <div class="now-playing">
+                <div class="now-cover" id="nowCover">♫</div>
+                <div class="now-text">
+                  <strong id="nowTitle">آهنگی انتخاب نشده</strong>
+                  <small id="nowArtist">Nova Music</small>
+                </div>
+              </div>
+
+              <div class="controls">
+                <button class="control-btn" id="shuffleBtn">⤨</button>
+                <button class="control-btn" id="prevBtn">◀▮</button>
+                <button class="play-btn" id="playBtn">▶</button>
+                <button class="control-btn" id="nextBtn">▮▶</button>
+                <button class="control-btn" id="repeatBtn">↻</button>
+              </div>
+
+              <div class="progress-area">
+                <span class="time" id="currentTime">0:00</span>
+                <input id="progress" type="range" min="0" max="100" value="0">
+                <span class="time" id="duration">0:00</span>
+              </div>
+            </footer>
+          </div>
+
+          <script>
+            const audio = document.getElementById("audio");
+            const songList = document.getElementById("songList");
+            const fileInput = document.getElementById("fileInput");
+            const addBtn = document.getElementById("addBtn");
+            const searchInput = document.getElementById("searchInput");
+            const progress = document.getElementById("progress");
+            const playBtn = document.getElementById("playBtn");
+            const prevBtn = document.getElementById("prevBtn");
+            const nextBtn = document.getElementById("nextBtn");
+            const shuffleBtn = document.getElementById("shuffleBtn");
+            const repeatBtn = document.getElementById("repeatBtn");
+            const nowTitle = document.getElementById("nowTitle");
+            const nowArtist = document.getElementById("nowArtist");
+            const nowCover = document.getElementById("nowCover");
+            const currentTime = document.getElementById("currentTime");
+            const duration = document.getElementById("duration");
+
+            const songs = [
+              {
+                title: "Dreamer's Journey",
+                artist: "Ambient Wave",
+                src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+                color: "linear-gradient(135deg,#7c3aed,#ec4899)"
+              },
+              {
+                title: "Cyber Sunset",
+                artist: "Synth City",
+                src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+                color: "linear-gradient(135deg,#0284c7,#7c3aed)"
+              }
+            ];
+
+            let currentIndex = 0;
+            let currentView = "all";
+            let isShuffle = false;
+            let isRepeat = false;
+            let favorites = JSON.parse(localStorage.getItem("novaFavs") || "[]");
+
+            function formatTime(s) {
+              if (!s || isNaN(s)) return "0:00";
+              const m = Math.floor(s / 60);
+              const sec = Math.floor(s % 60);
+              return m + ":" + (sec < 10 ? "0" : "") + sec;
+            }
+
+            function renderSongs() {
+              const q = searchInput.value.trim().toLowerCase();
+              const filtered = songs
+                .map((song, idx) => ({ ...song, idx }))
+                .filter(s => (s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)) &&
+                             (currentView === "all" || favorites.includes(s.idx)));
+
+              songList.innerHTML = "";
+              if (!filtered.length) {
+                songList.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px;">آهنگی یافت نشد</div>';
+                return;
+              }
+
+              filtered.forEach(s => {
+                const row = document.createElement("div");
+                row.className = "song-row" + (s.idx === currentIndex ? " active" : "");
+                row.innerHTML = `
+                  <div class="song-cover" style="background:${s.color || 'var(--primary)'}">♫</div>
+                  <div class="song-info">
+                    <strong>${s.title}</strong>
+                    <small>${s.artist}</small>
+                  </div>
+                  <button class="icon-btn ${favorites.includes(s.idx) ? 'active' : ''}">
+                    ${favorites.includes(s.idx) ? '♥' : '♡'}
+                  </button>
+                `;
+
+                row.querySelector("button").onclick = (e) => {
+                  e.stopPropagation();
+                  favorites = favorites.includes(s.idx) ? favorites.filter(x => x !== s.idx) : [...favorites, s.idx];
+                  localStorage.setItem("novaFavs", JSON.stringify(favorites));
+                  renderSongs();
+                };
+
+                row.onclick = () => { loadSong(s.idx); playSong(); };
+                songList.appendChild(row);
+              });
+            }
+
+            function loadSong(i) {
+              currentIndex = i;
+              const s = songs[currentIndex];
+              audio.src = s.src;
+              nowTitle.textContent = s.title;
+              nowArtist.textContent = s.artist;
+              nowCover.style.background = s.color || "var(--primary)";
+              renderSongs();
+            }
+
+            function playSong() {
+              audio.play().then(() => { playBtn.textContent = "Ⅱ"; }).catch(() => {});
+            }
+
+            function pauseSong() {
+              audio.pause();
+              playBtn.textContent = "▶";
+            }
+
+            playBtn.onclick = () => {
+              if (!audio.src) loadSong(0);
+              audio.paused ? playSong() : pauseSong();
+            };
+
+            function nextSong() {
+              if (isRepeat) { audio.currentTime = 0; playSong(); return; }
+              currentIndex = isShuffle ? Math.floor(Math.random() * songs.length) : (currentIndex + 1) % songs.length;
+              loadSong(currentIndex);
+              playSong();
+            }
+
+            function prevSong() {
+              currentIndex = (currentIndex - 1 + songs.length) % songs.length;
+              loadSong(currentIndex);
+              playSong();
+            }
+
+            nextBtn.onclick = nextSong;
+            prevBtn.onclick = prevSong;
+
+            shuffleBtn.onclick = () => {
+              isShuffle = !isShuffle;
+              shuffleBtn.classList.toggle("active", isShuffle);
+            };
+
+            repeatBtn.onclick = () => {
+              isRepeat = !isRepeat;
+              repeatBtn.classList.toggle("active", isRepeat);
+            };
+
+            audio.ontimeupdate = () => {
+              if (!audio.duration) return;
+              progress.value = (audio.currentTime / audio.duration) * 100;
+              currentTime.textContent = formatTime(audio.currentTime);
+              duration.textContent = formatTime(audio.duration);
+            };
+
+            audio.onended = nextSong;
+
+            progress.oninput = () => {
+              if (audio.duration) audio.currentTime = (progress.value / 100) * audio.duration;
+            };
+
+            addBtn.onclick = () => fileInput.click();
+
+            fileInput.onchange = (e) => {
+              const files = [...e.target.files];
+              files.forEach((f, idx) => {
+                songs.push({
+                  title: f.name.replace(/\.[^/.]+$/, ""),
+                  artist: "حافظه دستگاه",
+                  src: URL.createObjectURL(f),
+                  color: ["linear-gradient(135deg,#7c3aed,#ec4899)", "linear-gradient(135deg,#0284c7,#7c3aed)"][idx % 2]
+                });
+              });
+              renderSongs();
+              if (files.length) {
+                loadSong(songs.length - files.length);
+                playSong();
+              }
+            };
+
+            document.querySelectorAll(".tabs button").forEach(b => {
+              b.onclick = () => {
+                document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("active"));
+                b.classList.add("active");
+                currentView = b.dataset.view;
+                renderSongs();
+              };
+            });
+
+            searchInput.oninput = renderSongs;
+
+            loadSong(0);
+          </script>
+        </body>
+        </html>
+        """.trimIndent()
+    }
+}
